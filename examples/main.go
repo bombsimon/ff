@@ -10,6 +10,7 @@ import (
 
 func main() {
 	recursive := flag.Bool("recursive", false, "parse file recursive")
+	ignore := flag.String("ignore", "", "pattern to ignore")
 
 	flag.Parse()
 
@@ -17,9 +18,9 @@ func main() {
 
 	switch flag.NArg() {
 	case 0:
-		f, _ = ff.FilesFromPattern(".", "*", *recursive)
+		f, _ = ff.FilesFromPattern(".", "*", *ignore, *recursive)
 	default:
-		f, _ = ff.FilesFromPattern(".", flag.Args()[0], *recursive)
+		f, _ = ff.FilesFromPattern(".", flag.Args()[0], *ignore, *recursive)
 	}
 
 	format := "%-50s | %s\n"
