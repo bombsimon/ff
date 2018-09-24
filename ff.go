@@ -1,7 +1,6 @@
 package ff
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -19,20 +18,64 @@ type Match struct {
 func FilesFromPattern(base, matchPattern, ignorePattern string, recursive bool) ([]Match, error) {
 	var matchedFiles []Match
 
-	// Support go package syntax where './...' means '.' and allt it's sub
-	// directories. When this match pattern is given we look for all Go files
-	// recursively.
-	if matchPattern == "./..." {
-		matchPattern = "*.go"
-		recursive = true
-	}
-
-	matchedFiles, err := GetAllFiles(base, matchPattern, ignorePattern, recursive, matchedFiles)
+	matchedFiles, err := traverseDirs(base, matchPattern, ignorePattern, recursive, matchedFiles)
 	if err != nil {
 		return matchedFiles, err
 	}
 
 	return matchedFiles, nil
+}
+
+func traverseDirs(base string, match, ignore string, recursive bool, m []Match) ([]Match, error) {
+	matches, err := filepath.Glob(filepath.Join(base, match))
+	if err != nil {
+		return m, err
+	}
+
+	ignores, err := filepath.Glob(filepath.Join(base, ignore))
+	if err != nil {
+		return m, err
+	}
+
+	ignoreMap := mapFromSlice(ignores)
+
+	// Add all files from match pattern (and not in ignore pattern).
+	for _, file := range matches {
+		// Skip file if ignore pattern.
+		if _, ok := ignoreMap[file]; ok {
+			continue
+		}
+
+		info, err := os.Stat(file)
+		if err != nil {
+			return m, err
+		}
+
+		// We don't see matched folders as file matches.
+		if info.IsDir() {
+			continue
+		}
+
+		m = append(m, Match{base, info.Name()})
+	}
+
+	if recursive {
+		subdirs, err := GetDirsFromDir(base)
+		if err != nil {
+			return m, err
+		}
+
+		for _, subdir := range subdirs {
+			subM, err := traverseDirs(subdir.Path, match, ignore, recursive, m)
+			if err != nil {
+				return m, err
+			}
+
+			m = subM
+		}
+	}
+
+	return m, nil
 }
 
 // GetFilesFromDir returns all files from given directory.
@@ -79,63 +122,8 @@ func parseDir(dir string, files, dirs bool) ([]Match, error) {
 	return m, nil
 }
 
-// GetAllFiles returns a slice of matches for all files found in given path.
-// Without considering any matching.
-func GetAllFiles(base string, match, ignore string, recursive bool, m []Match) ([]Match, error) {
-	fmt.Printf("Checking for %s (ignoring %s) in %s, recursive is %v\n", match, ignore, base, recursive)
-
-	matchGlob := filepath.Join("./", base, match)
-	ignoreGlob := filepath.Join("./", base, ignore)
-
-	matches, err := filepath.Glob(matchGlob)
-	if err != nil {
-		return m, err
-	}
-
-	ignores, err := filepath.Glob(ignoreGlob)
-	if err != nil {
-		return m, err
-	}
-
-	ignoreMap := mapFromSlice(ignores)
-
-	// Add all files from match pattern (and not in ignore pattern).
-	for _, file := range matches {
-		// Skip file if ignore pattern.
-		if _, ok := ignoreMap[file]; ok {
-			continue
-		}
-
-		info, err := os.Stat(file)
-		if err != nil {
-			return m, err
-		}
-
-		// We don't see matched folders as file matches.
-		if info.IsDir() {
-			continue
-		}
-
-		m = append(m, Match{base, info.Name()})
-	}
-
-	if recursive {
-		subdirs, err := GetDirsFromDir(base)
-		if err != nil {
-			return m, err
-		}
-
-		for _, subdir := range subdirs {
-			subM, err := GetAllFiles(subdir.Path, match, ignore, recursive, m)
-			if err != nil {
-				return m, err
-			}
-
-			fmt.Println("should add", subM)
-		}
-	}
-
-	return m, nil
+func (m *Match) FullName() string {
+	return filepath.Join(m.Path, m.Filename)
 }
 
 func mapFromSlice(s []string) map[string]struct{} {
