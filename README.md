@@ -35,13 +35,4 @@ name and return a list of files matching the pattern.
 By supporting an optional boolean flag to parse recursive files can be found
 with slight difference to the traditional way to find files.
 
-## TODO
-
-All of it, including:
-
-* `--ignore` flag
-* Better support for folder recursion - need to take base path as input like common tools (`ff -r path/ pattern`)
-* Regular expressions - with negations
-* Better compliance with common "`globbing`" such as default ignore hidden (dot marked) files
-
 [Reference and inspiration](https://github.com/begin/globbing).
