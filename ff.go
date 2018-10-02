@@ -18,7 +18,53 @@ type Match struct {
 func FilesFromPattern(base, matchPattern, ignorePattern string, recursive bool) ([]Match, error) {
 	var matchedFiles []Match
 
-	matchedFiles, err := traverseDirs(base, matchPattern, ignorePattern, recursive, matchedFiles)
+	err := filepath.Walk(base, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Don't be recursive if not told by user except for given base.
+		if info.IsDir() && !recursive && !pathIsSame(info.Name(), base) {
+			return filepath.SkipDir
+		}
+
+		// Skip hidden files and directories except current path.
+		if strings.HasPrefix(info.Name(), ".") && !pathIsSame(info.Name(), base) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+
+			return nil
+		}
+
+		// Check if the file or dir matches the glob matchPattern.
+		matches, err := filepath.Match(matchPattern, info.Name())
+		if err != nil {
+			return err
+		}
+
+		if matches {
+			// If it matches, ensure that it doesn't also match the ignorePattern.
+			negativeMatches, err := filepath.Match(ignorePattern, info.Name())
+			if err != nil {
+				return err
+			}
+
+			if negativeMatches {
+				return nil
+			}
+
+			dir, file := filepath.Split(path)
+			if dir == "" {
+				dir = "./"
+			}
+
+			matchedFiles = append(matchedFiles, Match{dir, file})
+		}
+
+		return nil
+	})
+
 	if err != nil {
 		return matchedFiles, err
 	}
@@ -26,56 +72,9 @@ func FilesFromPattern(base, matchPattern, ignorePattern string, recursive bool) 
 	return matchedFiles, nil
 }
 
-func traverseDirs(base string, match, ignore string, recursive bool, m []Match) ([]Match, error) {
-	matches, err := filepath.Glob(filepath.Join(base, match))
-	if err != nil {
-		return m, err
-	}
-
-	ignores, err := filepath.Glob(filepath.Join(base, ignore))
-	if err != nil {
-		return m, err
-	}
-
-	ignoreMap := mapFromSlice(ignores)
-
-	// Add all files from match pattern (and not in ignore pattern).
-	for _, file := range matches {
-		// Skip file if ignore pattern.
-		if _, ok := ignoreMap[file]; ok {
-			continue
-		}
-
-		info, err := os.Stat(file)
-		if err != nil {
-			return m, err
-		}
-
-		// We don't see matched folders as file matches.
-		if info.IsDir() {
-			continue
-		}
-
-		m = append(m, Match{base, info.Name()})
-	}
-
-	if recursive {
-		subdirs, err := GetDirsFromDir(base)
-		if err != nil {
-			return m, err
-		}
-
-		for _, subdir := range subdirs {
-			subM, err := traverseDirs(subdir.Path, match, ignore, recursive, m)
-			if err != nil {
-				return m, err
-			}
-
-			m = subM
-		}
-	}
-
-	return m, nil
+// FullName returns the full path plus name for a file.
+func (m *Match) FullName() string {
+	return filepath.Join(m.Path, m.Filename)
 }
 
 // GetFilesFromDir returns all files from given directory.
@@ -122,16 +121,6 @@ func parseDir(dir string, files, dirs bool) ([]Match, error) {
 	return m, nil
 }
 
-func (m *Match) FullName() string {
-	return filepath.Join(m.Path, m.Filename)
-}
-
-func mapFromSlice(s []string) map[string]struct{} {
-	uniq := make(map[string]struct{})
-
-	for _, v := range s {
-		uniq[v] = struct{}{}
-	}
-
-	return uniq
+func pathIsSame(p1, p2 string) bool {
+	return filepath.Clean(p1) == filepath.Clean(p2)
 }
