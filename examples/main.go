@@ -21,23 +21,21 @@ func main() {
 
 	flag.Parse()
 
-	var f []ff.Match
+	var f []string
 
 	switch flag.NArg() {
 	case 0:
-		f, _ = ff.FilesFromPattern(".", "*", ignore, recursive)
-	case 1:
-		f, _ = ff.FilesFromPattern(".", flag.Args()[0], ignore, recursive)
+		f, _ = ff.FilesFromPattern("*")
 	default:
-		f, _ = ff.FilesFromPattern(flag.Args()[0], flag.Args()[1], ignore, recursive)
+		f, _ = ff.FilesFromPattern(flag.Args()[0])
 	}
 
-	format := "%-20s | %-20s | %s\n"
+	format := "%-20s\n"
 
-	fmt.Printf(format, "Path", "Filename", "Full name")
+	fmt.Printf(format, "File or dir")
 	fmt.Println(strings.Repeat("-", 70))
 
 	for _, x := range f {
-		fmt.Printf(format, x.Path, x.Filename, x.FullName())
+		fmt.Printf(format, x)
 	}
 }
